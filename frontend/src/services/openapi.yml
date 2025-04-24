@@ -1,0 +1,2465 @@
+openapi: 3.0.2
+info:
+  title: Microservices API
+  description: API per l'autenticazione, gestione magazzino, ordini, pagamenti e spedizioni
+  version: 1.0.0
+  contact:
+    name: Daniele Zoccali
+    email: daniele.zoccali@gmail.com
+servers:
+  - url: https://microservices-alb-216051693.us-east-1.elb.amazonaws.com
+    description: Server principale (ALB)
+  - url: https://localhost:3002
+    description: Server di sviluppo per Warehouse
+  - url: https://localhost:3005
+    description: Server di sviluppo per Payments
+security:
+  - bearerAuth: [] #"Per default, tutte le rotte richiedono un token JWT nel campo Authorization: Bearer <token>. "
+
+x-42c-accept-empty-security: true
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # Schema di errore generico per risposte di errore
+    Error:
+      type: object
+      additionalProperties: false
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          maxLength: 500
+          pattern: '^.{1,500}$' # accetta qualsiasi stringa con almeno 1 carattere fino a 500.
+        error:
+          description: "Descrizione dell'errore; può essere una stringa o un oggetto."
+          type: string
+          maxLength: 500
+          pattern: '^.{1,500}$' # accetta qualsiasi stringa con almeno 1 carattere fino a 500
+        request_id:
+          type: string
+          maxLength: 100
+          description: "Identificativo della richiesta (se presente)."
+          pattern: '^[0-9a-f]{32}$'
+          example: "fd723645da950a54df847147b19f1108"
+        success:
+          type: boolean
+          description: "Flag che, in alcuni casi, è restituito anche in risposta di errore."
+    
+    NoRoutes:
+      type: object
+      additionalProperties: false
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          maxLength: 500
+          pattern: '^.{1,500}$' # accetta qualsiasi stringa con almeno 1 carattere fino a 500.
+        request_id:
+          type: string
+          maxLength: 100
+          description: "Identificativo della richiesta (se presente)."
+          pattern: '^[0-9a-f]{32}$'
+          example: "fd723645da950a54df847147b19f1108"
+        
+    UploadError:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          maxLength: 500
+          pattern: '^.{1,500}$' # accetta qualsiasi stringa con almeno 1 carattere fino a 500
+    
+    ErrorAPIData:
+      type: object
+      additionalProperties: false
+      properties:
+        message:
+          type: string
+          example: "Errore nel recupero dell'utente"
+          maxLength: 500
+          pattern: ^.{1,500}$
+        error:
+          type: object
+          additionalProperties: false
+          properties:
+            stringValue:
+              type: string
+              maxLength: 50
+              pattern: ^.{1,50}$
+              example: '":userId"'
+            valueType:
+              type: string
+              maxLength: 50
+              pattern: ^.{1,50}$
+              example: "string"
+            kind:
+              type: string
+              maxLength: 50
+              pattern: ^.{1,50}$
+              example: "ObjectId"
+            value:
+              type: string
+              maxLength: 50
+              pattern: ^.{1,50}$
+              example: ":userId"
+            path:
+              type: string
+              maxLength: 50
+              pattern: ^.{1,50}$
+              example: "_id"
+            reason:
+              type: object
+              additionalProperties: false
+              description: Dettagli opzionali sull'errore
+            name:
+              type: string
+              maxLength: 50
+              pattern: ^.{1,50}$
+              example: "CastError"
+            message:
+              type: string
+              maxLength: 500
+              pattern: ^.{1,500}$
+              example: "Cast to ObjectId failed for value \":userId\" (type string) at path \"_id\" for model \"User\""
+              
+
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 255
+          pattern: '^\\S+@\\S+\\.\\S+$'
+          example: poc@admin.com
+        password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 100
+          pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,}$'
+          example: Abcdef1234!
+
+    LoginResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - _id
+        - username
+        - email
+        - role
+        - isAdmin
+        - token
+      properties:
+        _id:
+          type: string
+          maxLength: 24
+          pattern: '^[0-9a-f]{24}$' # stringa esadecimale di 24 caratteri
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+          pattern: '^[a-zA-Z0-9_-]{3,50}$'
+        email:
+          type: string
+          format: email
+          pattern: '^\S+@\S+\.\S+$'
+          maxLength: 255
+        role:
+          type: string
+          maxLength: 100
+          pattern: '^.{1,100}$'
+        isAdmin:
+          type: boolean
+        token:
+          type: string
+          maxLength: 2000
+          pattern: '^[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+$'
+
+    OrderNotFound:
+      type: object
+      additionalProperties: false
+      required:
+        - success
+        - message
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+          maxLength: 500
+          pattern: '^.{1,500}$' # accetta qualsiasi stringa con almeno 1 carattere fino a 500.
+        
+
+
+    RegisterRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - username
+        - email
+        - password
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+          pattern: '^[a-zA-Z0-9_-]{3,50}$'
+        email:
+          type: string
+          format: email
+          maxLength: 255
+          pattern: '^\\S+@\\S+\\.\\S+$'
+        password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 100
+          pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,}$'
+    
+    RegisterResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - _id
+        - username
+        - email
+        - role
+        - token
+      properties:
+        _id:
+          type: string
+          maxLength: 24
+          pattern: '^[0-9a-f]{24}$' # stringa esadecimale di 24 caratteri
+        username:
+          type: string
+          pattern: '^[a-zA-Z0-9_-]{3,50}$'
+          maxLength: 50
+        email:
+          type: string
+          format: email
+          pattern: '^\S+@\S+\.\S+$'
+          maxLength: 255
+        role:
+          type: string
+          enum: [admin, user] # oppure un pattern, se i ruoli possono variare
+        token:
+          type: string
+          maxLength: 2000
+          pattern: '^[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+$'
+    UploadProfileResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - message
+        - user
+      properties:
+        message:
+          type: string
+          maxLength: 500
+          pattern: '^.{1,500}$' # accetta qualsiasi stringa con almeno 1 carattere fino a 500.
+        user:
+          type: object
+          additionalProperties: false
+          required: # anche profileImage in teoria ma teniamoci flessibili
+            - username
+            - email
+            - _id
+          properties:
+            username:
+              type: string
+              maxLength: 50
+              pattern: '^[a-zA-Z0-9_-]{1,50}$'
+            email:
+              type: string
+              format: email
+              maxLength: 255
+              pattern: '^\S+@\S+\.\S+$'
+            profileImage: #(opzionale)
+              type: string
+              format: uri
+              maxLength: 500
+              pattern: '^https:\/\/.*$'
+            _id:
+              type: string
+              maxLength: 24
+              pattern: '^[0-9a-f]{24}$'
+    ApiDataResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - _id
+        - username
+        - email
+      properties:
+        _id:
+          type: string
+          maxLength: 24
+          pattern: '^[0-9a-f]{24}$'
+        username:
+          type: string
+          maxLength: 50
+          pattern: '^[a-zA-Z0-9_-]{1,50}$'
+        email:
+          type: string
+          format: email
+          maxLength: 255
+          pattern: '^\S+@\S+\.\S+$'
+            
+
+
+            
+    getAllResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - orders
+      properties:
+        orders:
+          type: array
+          items: 
+            type: object
+            additionalProperties: false
+            #required:
+            #  -... 
+            properties:
+              __v:
+                type: integer
+                example: 0
+              cartItems:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CartItemconId'
+                maxItems: 100
+              orderId:
+                type: string
+                example: "ORD-1743066214867"
+                pattern: '^ORD-\d{13}$'
+                maxLength: 17 #sempre 13 NUMERI dopo "ORD"
+              userId:
+                type: string
+                maxLength: 24
+                pattern: '^[0-9a-f]{24}$'
+              status:
+                type: string
+                enum: ['pagato', 'in-preparazione', 'creato', 'spedito', 'annullato']
+                maxLength: 20
+                example: "pagato"
+              subTotal:
+                type: number
+                example: 1529
+              shippingCost:
+                type: number
+                example: 0
+              totalAmount:
+                type: number
+                example: 1529
+              createdAt:
+                type: string
+                format: date-time
+                example: "2025-03-27T09:03:49.179Z"
+              _id:
+                type: string
+                maxLength: 24
+                pattern: '^[0-9a-f]{24}$'
+              updatedAt:
+                type: string
+                format: date-time
+                example: "2025-03-27T09:03:49.179Z"
+          maxItems: 10
+              
+     
+        
+
+    ProfileResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - user
+      properties:
+        user:
+          type: object
+          additionalProperties: false
+          required:
+            - _id
+            - username
+            - email
+            - role
+            - createdAt
+            - updatedAt
+            - __v
+          properties:
+            _id:
+              type: string
+              maxLength: 24
+              pattern: '^[0-9a-f]{24}$'
+            username:
+              type: string
+              maxLength: 50
+              pattern: '^[a-zA-Z0-9_-]{1,50}$'
+            email:
+              type: string
+              format: email
+              maxLength: 255
+              pattern: '^\S+@\S+\.\S+$'
+            role:
+              type: string
+              maxLength: 20
+              pattern: '^[a-z]+$'
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+            __v:
+              type: integer
+            profileImage: #(opzionale)
+              type: string
+              format: uri
+              maxLength: 500
+              pattern: '^https:\/\/.*$'
+        
+    ProfileUpdateRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          maxLength: 24
+          pattern: '^[0-9a-f]{24}$' #stringa esadecimale di 24 caratteri
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+          pattern: '^[a-zA-Z0-9_-]{3,50}$'
+        email:
+          type: string
+          format: email
+          maxLength: 255
+          pattern: '^\\S+@\\S+\\.\\S+$'
+        imageKey:
+          type: string
+          maxLength: 500
+          pattern: '^.{1,500}$'
+        password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 100
+          pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,}$'
+    
+    #Ok (200)
+    UploadResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - imageKey
+      properties:
+        imageKey:
+          type: string
+          maxLength: 100
+          pattern: '^.{1,100}$'
+        
+    HealthResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          maxLength: 20
+          pattern: '^.{1,20}$'
+    
+    Health503Html:
+      type: string
+      description: Risposta HTML in caso di errore generato da ALB
+      maxLength: 4096
+      pattern: '^<html>[\\s\\S]{1,4090}</html>$'
+      example: |
+        <html>
+        <head>
+          <title>503 Service Temporarily Unavailable</title>
+        </head>
+        <body>
+          <center>
+              <h1>503 Service Temporarily Unavailable</h1>
+          </center>
+        </body>
+        </html>
+    Product:
+      type: object
+      additionalProperties: false
+      required:
+        - _id
+        - name
+        - price
+        - image
+        - qty
+      properties:
+        _id:
+          type: string
+          maxLength: 24
+          pattern: '^[0-9a-f]{24}$'  # stringa esadecimale di 24 caratteri
+        name:
+          type: string
+          maxLength: 100
+          pattern: '^.{1,100}$'  # qualsiasi stringa da 1 a 100 caratteri
+        price:
+          type: number
+          minimum: 0
+          maximum: 9999999
+        image:
+          type: array
+          items:
+            type: string
+            format: uri
+            maxLength: 2048
+            pattern: '^(https?:\/\/).+$'
+          maxItems: 100
+        qty:
+          type: integer
+          minimum: 1
+          maximum: 9999999
+        __v:
+          type: integer
+          minimum: 0
+
+    
+    OrderItem:
+      type: object
+      additionalProperties: false
+      required:
+        - productId
+        - name
+        - quantity
+        - price
+      properties:
+        productId:
+          type: string
+          maxLength: 24
+          pattern: '^[0-9a-f]{24}$' #stringa esadecimale di 24 caratteri
+        name:
+          type: string
+          maxLength: 100
+          pattern: '^.{1,100}$' # accetta qualsiasi stringa con almeno 1 carattere fino a 100
+        quantity:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 999999
+        price:
+          type: number
+          format: int32
+          minimum: 0.01
+          maximum: 9999999
+    
+    Order:
+      type: object
+      additionalProperties: false
+      required:
+        - orderId
+        - userId
+        - cartItems
+        - status
+        - subTotal
+        - shippingCost
+        - totalAmount
+        - _id
+        - createdAt
+        - updatedAt
+      properties:
+        orderId:
+          type: string
+          maxLength: 17 #sempre 13 NUMERI dopo "ORD"
+          pattern: '^ORD-\d{13}$' #sempre 13 NUMERI dopo "ORD"
+          example: ORD-1744624742529
+        userId:
+          type: string
+          maxLength: 24
+          pattern: '^[0-9a-f]{24}$'
+        cartItems:
+          type: array
+          items:
+            $ref: '#/components/schemas/CartItem'
+          maxItems: 100
+        status:
+          type: string
+          enum: [in elaborazione, spedito, consegnato, annullato, pagato]
+          example: pagato
+        subTotal:
+          type: number
+          minimum: 0
+          example: 299
+          maximum: 16000
+          format: int32
+        shippingCost:
+          type: number
+          minimum: 0
+          example: 20
+          maximum: 20
+          format: int32
+        totalAmount:
+          type: number
+          minimum: 0
+          example: 319
+          maximum: 1024
+          format: int32
+        _id:
+          type: string
+          maxLength: 24
+          pattern: '^[0-9a-f]{24}$'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        __v:
+          type: integer
+          minimum: 0
+          maximum: 10
+          format: int32
+          example: 0
+    
+    
+    CartItem:
+      type: object
+      additionalProperties: false
+      required:
+        - productId
+        - name
+        - quantity
+        - price
+      properties:
+        productId:
+          type: string
+          minLength: 24
+          maxLength: 24
+          pattern: '^[0-9a-f]{24}$'
+          example: "67e3ca2928853dfb80a99853"
+        name:
+          type: string
+          example: iPhone 16 Pro
+          minLength: 3
+          maxLength: 100
+          pattern: ^.{1,100}$
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 100
+          format: int32
+          example: 1
+        price:
+          type: number
+          minimum: 1
+          maximum: 20000
+          example: 1339
+          format: int32
+          
+    CartItemconId:
+      type: object
+      additionalProperties: false
+      required:
+        - quantity
+        - productId
+        - name
+        - _id
+        - price
+      properties:
+        productId:
+          type: string
+          minLength: 24
+          maxLength: 24
+          pattern: '^[0-9a-f]{24}$'
+          example: "67e3ca2928853dfb80a99853"
+        name:
+          type: string
+          example: iPhone 16 Pro
+          minLength: 3
+          maxLength: 100
+          pattern: ^.{1,100}$
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 100
+          format: int32
+          example: 1
+        _id:
+          type: string
+          maxLength: 100
+          pattern: '^[0-9a-f]{100}$'
+        price:
+          type: number
+          minimum: 1
+          maximum: 20000
+          example: 1339
+          format: int32
+        
+    OrderResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - success
+        - order
+      properties:
+        success:
+          type: boolean
+        order:
+          $ref: '#/components/schemas/Order'
+    
+    OrdersResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - orders
+      properties:
+        orders:
+          type: array
+          items:
+            $ref: '#/components/schemas/Order'
+          maxItems: 10
+    
+    Shipment:
+      type: object
+      additionalProperties: false
+      required:
+        - orderId
+        - userId
+        - destinationAddress
+        - currentLocation
+      properties:
+        orderId:
+          type: string
+          maxLength: 20
+          pattern: '^ORD-\d{13}$' #sempre 13 NUMERI dopo "ORD"
+        userId:
+          type: string
+          maxLength: 24
+          pattern: '^[0-9a-f]{24}$' #stringa esadecimale di 24 caratteri
+        destinationAddress:
+          type: string
+          maxLength: 255
+          pattern: '^.{1,255}$' # accetta qualsiasi stringa con almeno 1 carattere fino a 100
+        currentLocation:
+          type: object
+          additionalProperties: false
+          required:
+            - type
+            - coordinates
+          properties:
+            type:
+              type: string
+              enum: ["Point"]
+            coordinates:
+              type: array
+              items:
+                type: number
+                format: float
+                minimum: -180
+                maximum: 180
+              minItems: 2
+              maxItems: 2
+    
+    ShipmentResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        success:
+          type: boolean
+          example: true
+        shipment:
+          type: object
+          additionalProperties: false
+
+          required:
+            - _id
+            - orderId
+            - userId
+            - trackingNumber
+            - status
+            - destinationAddress
+            - createdAt
+            - updatedAt
+            - currentLocation
+          properties:
+            _id:
+              type: string
+              pattern: '^[0-9a-f]{24}$'
+              example: "67eaafc1dc548a4302eab950"
+            orderId:
+              type: string
+              maxLength: 20
+              pattern: '^ORD-\d{13}$' #sempre 13 NUMERI dopo "ORD"
+              example: "ORD-1743433572670"
+            userId:
+              type: string
+              pattern: '^[0-9a-f]{24}$'
+              example: "67cf0679d17aae8377e0fa6f"
+            trackingNumber:
+              type: string
+              pattern: '^TRACK-\d{13}$' #sempre 13 NUMERI dopo "TRACK"
+              maxLength: 20
+              example: "TRACK-1744702916446"
+            status:
+              type: string
+              enum: ['pagato', 'in-preparazione', 'creato', 'spedito', 'annullato']
+              maxLength: 20
+              example: "in-preparazione"
+            destinationAddress:
+              type: string
+              maxLength: 150
+              pattern: '^.{1,150}$'
+              example: "Via Calabria, 9, 90144 Palermo PA, Italy"
+              
+            createdAt:
+              type: string
+              format: date-time
+              example: "2025-03-31T15:07:45.771Z"
+            updatedAt:
+              type: string
+              format: date-time
+              example: "2025-03-31T15:07:45.773Z"
+            __v:
+              type: integer
+              example: 0
+            currentLocation:
+              type: object
+              additionalProperties: false
+
+              required:
+                - type
+                - coordinates
+              properties:
+                type:
+                  type: string
+                  enum: [Point]
+                  example: "Point"
+                coordinates:
+                  type: array
+                  minItems: 2
+                  maxItems: 2
+                  items:
+                    type: number
+                  example: [13.338375, 38.1440748]
+
+ 
+    PaymentRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - userId
+        - amount
+        - currency
+        - quantity
+      properties:
+        userId:
+          type: string
+          maxLength: 24
+          pattern: '^[0-9a-f]{24}$' #stringa esadecimale di 24 caratteri
+        amount:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 9999999
+        currency:
+          type: string
+          pattern: '^[a-z]{3}$'  # <-- migliore per codici ISO 4217 (es. eur, usd)
+          example: "eur"
+        quantity:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 9999999
+
+    PaymentResponse:
+      type: object
+      additionalProperties: false
+      required: # in teoria anche signature
+        - clientSecret
+        - paymentId
+        - orderId
+      properties:
+        clientSecret:
+          type: string
+          maxLength: 500
+          pattern: '^.{1,500}$' # accetta qualsiasi stringa con almeno 1 carattere fino a 100
+        paymentId:
+          type: string
+          maxLength: 100
+          pattern: '^.{1,100}$' # accetta qualsiasi stringa con almeno 1 carattere fino a 100
+        orderId:
+          type: string
+          maxLength: 20
+          pattern: '^ORD-\d{13}$' #sempre 13 NUMERI dopo "ORD"
+        signature:
+          type: string
+          maxLength: 500
+          pattern: '^.{1,500}$'
+    
+    ErrorOnlyMessage:
+      type: object
+      additionalProperties: false
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          maxLength: 500
+          pattern: '^.{1,500}$' # accetta qualsiasi stringa con almeno 1 carattere fino a 500.
+    
+    OrderListResponse:
+      type: array
+      items:
+        type: object
+        additionalProperties: false
+        required:
+          - _id
+          - orderId
+          - userId
+          - cartItems
+          - status
+          - subTotal
+          - shippingCost
+          - totalAmount
+          - createdAt
+          - updatedAt
+          - __v
+        properties:
+          _id:
+            type: string
+            pattern: '^[0-9a-f]{24}$'
+          orderId:
+            type: string
+            maxLength: 17
+            pattern: '^ORD-\d{13}$' #sempre 13 NUMERI dopo "ORD"
+          userId:
+            type: string
+            pattern: '^[0-9a-f]{24}$'
+          cartItems:
+            type: array
+            items:
+              type: object
+              additionalProperties: false
+              required:
+                - productId
+                - name
+                - quantity
+                - price
+                - _id
+              properties:
+                productId:
+                  type: string
+                  pattern: '^[0-9a-f]{24}$'
+                name:
+                  type: string
+                  maxLength: 100
+                  pattern: ^.{1,100}$
+                quantity:
+                  type: integer
+                price:
+                  type: number
+                _id:
+                  type: string
+                  pattern: '^[0-9a-f]{24}$'
+            maxItems: 100
+          status:
+            type: string
+            enum: ['pagato', 'in-preparazione', 'creato', 'spedito', 'annullato']
+            maxLength: 20
+            example: "in-preparazione"
+          subTotal:
+            type: number
+          shippingCost:
+            type: number
+          totalAmount:
+            type: number
+          createdAt:
+            type: string
+            format: date-time
+          updatedAt:
+            type: string
+            format: date-time
+          __v:
+            type: integer
+      maxItems: 100
+
+
+
+    #PERFETTO.
+    OrderUpdateResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - message
+        - order
+      properties:
+        message:
+          type: string
+          example: "Stato ordine aggiornato"
+          pattern: ^.{1,500}$
+          maxLength: 500
+        order:
+          type: object
+          additionalProperties: false
+          required:
+            - _id
+            - orderId
+            - userId
+            - cartItems
+            - status
+            - subTotal
+            - shippingCost
+            - totalAmount
+            - createdAt
+            - updatedAt
+            - __v
+          properties:
+            _id:
+              type: string
+              pattern: '^[0-9a-f]{24}$'
+            orderId:
+              type: string
+              maxLength: 17
+              pattern: '^ORD-\d{13}$' #sempre 13 NUMERI dopo "ORD"
+            userId:
+              type: string
+              pattern: '^[0-9a-f]{24}$'
+            cartItems:
+              type: array
+              items:
+                type: object
+                additionalProperties: false
+                required:
+                  - productId
+                  - name
+                  - quantity
+                  - price
+                  - _id
+                properties:
+                  productId:
+                    type: string
+                    pattern: '^[0-9a-f]{24}$'
+                  name:
+                    type: string
+                    maxLength: 100
+                    pattern: ^.{1,100}$
+                  quantity:
+                    type: integer
+                  price:
+                    type: number
+                  _id:
+                    type: string
+                    pattern: '^[0-9a-f]{24}$'
+              maxItems: 100
+            status:
+              type: string
+              enum: ['pagato', 'in-preparazione', 'creato', 'spedito', 'annullato']
+              maxLength: 20
+              example: "in-preparazione"
+            subTotal:
+              type: number
+            shippingCost:
+              type: number
+            totalAmount:
+              type: number
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+            __v:
+              type: integer
+
+    ErrorRegister:
+      type: object
+      additionalProperties: false
+      required:
+        - message
+        - error
+      properties:
+        message:
+          type: string
+          maxLength: 500
+          pattern: '^.{1,500}$' # accetta qualsiasi stringa con almeno 1 carattere fino a 500.
+        error:  
+          type: string
+          maxLength: 1000
+          pattern: '^.{1,1000}$'
+    
+     # anche qui limitiamo la lunghezza ma accettiamo qualsiasi contenuto testuale
+
+ # accetta qualsiasi stringa con almeno 1 carattere fino a 100
+
+paths:
+
+
+#Ok Happy path in teoria
+  /api/auth/login:
+    servers:
+    - url: https://microservices-alb-216051693.us-east-1.elb.amazonaws.com
+      description: Server principale
+    post:
+      summary: Accesso utente
+      tags:
+        - Authentication
+      security: [] #Override, non serve sicurezza (mezzo per ottenere il token)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login riuscito
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Credenziali non valide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOnlyMessage'
+        '401':
+          description: Non autorizzato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOnlyMessage'
+              examples: #Serve a non fare fallire il test in 42crunch 
+                invalidCredentials:
+                  summary: Invalid credentials
+                  value:
+                    message: "Credenziali non valide" #Kong gateway message
+
+        '406':
+          description: Not Acceptable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOnlyMessage'
+        '500':
+          description: Errore interno del server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOnlyMessage'
+        default:
+          description: Errore non previsto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOnlyMessage'
+#Ok Happy path in teoria
+  /api/auth/register:
+    servers:
+    - url: https://microservices-alb-216051693.us-east-1.elb.amazonaws.com
+      description: Server principale
+    post:
+      summary: Registrazione nuovo utente
+      tags:
+        - Authentication
+      security: [] #Override, non serve sicurezza (mezzo per ottenere il token)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            examples:
+              validRegistration:
+                summary: ValidRegistration
+                value:
+                  username: TestUserPoC
+                  email: test@poc42.com
+                  password: Abcdef12345!     
+      responses:
+        '201':
+          description: Utente registrato con successo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+        '400':
+          description: Dati di registrazione non validi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOnlyMessage'
+        '406':
+          description: Not Acceptable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Email già esistente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Errore interno del server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRegister'
+
+        default:
+          description: Errore non previsto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/auth/profile:
+    servers:
+    - url: https://microservices-alb-216051693.us-east-1.elb.amazonaws.com
+      description: Server principale
+    get:
+      summary: Ottieni profilo utente
+      tags:
+        - Authentication
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Profilo utente recuperato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOnlyMessage'
+        '401':
+          description: Non autorizzato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden - Non hai i permessi necessari
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Profilo non trovato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+            text/html:
+              schema:
+                type: string
+                maxLength: 4096
+                pattern: '^<html>[\\s\\S]{1,4090}</html>$'
+        '406':
+          description: Not Acceptable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Errore interno del server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          description: Errore non previsto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/auth/upload:
+    servers:
+    - url: https://microservices-alb-216051693.us-east-1.elb.amazonaws.com
+      description: Server principale
+    post:
+      summary: Carica file
+      tags:
+        - Authentication
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  maxLength: 16384 
+      responses:
+        '200':
+          description: Upload completato con successo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResponse'
+        '400':
+          description: Errore nell'upload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadError' #perchè restituisce "error" al posto di "message"
+        '401':
+          description: Non autorizzato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadError'
+        '406':
+          description: Not Acceptable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadError'
+        '500':
+          description: Errore interno del server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadError'
+        default:
+          description: Errore non previsto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadError'
+
+#SKIP HAPPY PATH PROBLEMA S3 (TOKEN)
+  /api/auth/uploadProfile/{id}:
+    servers:
+    - url: https://microservices-alb-216051693.us-east-1.elb.amazonaws.com
+      description: Server principale
+    put:
+      summary: Aggiorna profilo utente
+      tags:
+        - Authentication
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 24
+            pattern: '^[0-9a-f]{24}$' #stringa esadecimale di 24 caratteri
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileUpdateRequest'
+      responses:
+        '200':
+          description: Profilo aggiornato con successo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadProfileResponse'
+        '403':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOnlyMessage'
+              examples: #Serve a non fare fallire il test in 42crunch 
+                missingAuthorization:
+                  summary: Unauthorized
+                  value:
+                    message: "Unauthorized" #Kong gateway message
+        '400':
+          description: Errore nell'aggiornamento del profilo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples: #Serve a non fare fallire il test in 42crunch 
+                badRequest:
+                  summary: Bad Request
+                  value:
+                    message: "Bad Request: userId missing in URL" #Kong gateway message
+        '401':
+          description: Non autorizzato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOnlyMessage'
+              examples: #Serve a non fare fallire il test in 42crunch 
+                missingAuthorization:
+                  summary: Unauthorized
+                  value:
+                    message: "Unauthorized: Missing Authorization header" #Kong gateway message
+                missingToken:
+                  summary: MissingToken
+                  value:
+                    message: "Unauthorized: Invalid or missing token" #Kong gateway message
+                invalidJWT:
+                  summary: InvalidToken
+                  value:
+                    message: "Unauthorized: Invalid JWT" #Kong gateway message
+                userId:
+                  summary: InvalidUserId insided Token
+                  value:
+                    message: "Unauthorized: Missing user ID in token"
+        '404':
+          description: Utente non trovato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+            text/html:
+              schema:
+                type: string
+                maxLength: 4096
+                pattern: '^<html>[\\s\\S]{1,4090}</html>$'
+        '406':
+          description: Not Acceptable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Errore interno del server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          description: Errore non previsto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/auth/health:
+    servers:
+    - url: https://microservices-alb-216051693.us-east-1.elb.amazonaws.com
+      description: Server principale
+    get:
+      summary: Controllo stato del servizio
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Servizio attivo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '406':
+          description: Not Acceptable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too Many Requests - Limite di richieste raggiunto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples: #Serve a non fare fallire il test in 42crunch 
+                tooManyRequest:
+                  summary: Too Many Requests
+                  value:
+                    message: "API rate limit exceeded" #Kong gateway message
+        '500':
+          description: Servizio non disponibile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Servizio non disponibile temporaneamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health503Html'
+              
+        default:
+          description: Errore non previsto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/auth/data/{userId}:
+    servers:
+    - url: https://microservices-alb-216051693.us-east-1.elb.amazonaws.com
+      description: Server principale
+    get:
+      summary: Ottieni dati utente
+      tags:
+        - Authentication
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 24
+            pattern: '^[0-9a-f]{24}$' #stringa esadecimale di 24 caratteri
+      responses:
+        '200':
+          description: Dati utente recuperati
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiDataResponse'
+        '401':
+          description: Non autorizzato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Utente non trovato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+            text/html:
+              schema:
+                type: string
+                maxLength: 4096
+                pattern: '^<html>[\\s\\S]{1,4090}</html>$'
+        '406':
+          description: Not Acceptable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Errore interno del server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorAPIData'
+        default:
+          description: Errore non previsto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /admin/warehouse/products:
+    servers:
+    - url: https://localhost:3002
+      description: Server di sviluppo per Warehouse
+    get:
+      summary: Ottieni tutti i prodotti nel magazzino
+      tags:
+        - Warehouse
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Lista di prodotti nel magazzino
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+                maxItems: 10
+        '401':
+          description: Non autorizzato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Non autorizzato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoRoutes'
+        '406':
+          description: Not Acceptable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Errore interno del server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOnlyMessage'
+        default:
+          description: Errore non previsto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+#OK happy path in teoria
+  /admin/warehouse/product/{productId}/quantity:
+    servers:
+    - url: https://localhost:3002
+      description: Server di sviluppo per Warehouse
+    patch:
+      summary: Aggiorna quantità prodotto
+      tags:
+        - Warehouse
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 24
+            pattern: '^[0-9a-f]{24}$' #stringa esadecimale di 24 caratteri
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - change
+              properties:
+                change:
+                  type: integer
+                  format: int32
+                  minimum: -9999999
+                  maximum: 9999999
+            examples:
+              updateQty:
+                summary: Update valido      
+                value:
+                  change: 1
+      responses:
+        '200':
+          description: Quantità aggiornata con successo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '400':
+          description: Dati non validi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Non autorizzato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Prodotto non trovato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+            text/html:
+              schema:
+                type: string
+                maxLength: 4096
+                pattern: '^<html>[\\s\\S]{1,4090}</html>$'
+        '406':
+          description: Not Acceptable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Errore interno del server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          description: Errore non previsto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          
+
+  /admin/warehouse/product/{productId}:
+    servers:
+    - url: https://localhost:3002
+      description: Server di sviluppo per Warehouse
+    get:
+      summary: Ottieni dettagli di un prodotto
+      tags:
+        - Warehouse
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 24
+            pattern: '^[0-9a-f]{24}$' #stringa esadecimale di 24 caratteri
+      responses:
+        '200':
+          description: Dettagli del prodotto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '401':
+          description: Non autorizzato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Prodotto non trovato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+            text/html:
+              schema:
+                type: string
+                maxLength: 4096
+                pattern: '^<html>[\\s\\S]{1,4090}</html>$'
+                
+        '406':
+          description: Not Acceptable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Errore interno del server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          description: Errore non previsto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      summary: Elimina un prodotto
+      tags:
+        - Warehouse
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 24
+            pattern: '^[0-9a-f]{24}$' #stringa esadecimale di 24 caratteri
+      responses:
+        '200':
+          description: Elimanto con successo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOnlyMessage'
+              examples:
+                validDelete:
+                  summary: Eliminazione valida - Happy path
+                  value:
+                    message: "Prodotto eliminato con successo"
+        '401':
+          description: Non autorizzato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Prodotto non trovato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoRoutes'
+            text/html:
+              schema:
+                type: string
+                maxLength: 4096
+                pattern: '^<html>[\\s\\S]{1,4090}</html>$'
+        '406':
+          description: Not Acceptable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Errore interno del server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          description: Errore non previsto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+
+
+
+
+
+
+#Ok HAPPY PATH
+  /admin/orders/create:
+    servers:
+    - url: https://microservices-alb-216051693.us-east-1.elb.amazonaws.com
+      description: Server principale
+    post:
+      summary: Crea un nuovo ordine
+      tags:
+        - Orders
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              additionalProperties: false
+              required:
+                - orderId
+                - userId
+                - cartItems
+                - status
+                - signature 
+              type: object
+              properties:
+                orderId:
+                  type: string
+                  example: "ORD-1743066214867"
+                  pattern: '^ORD-\d{13}$'
+                  minLength: 17
+                  maxLength: 17 #sempre 13 NUMERI dopo "ORD"
+                userId: 
+                  type: string
+                  minLength: 24
+                  maxLength: 24 #sempre 13 NUMERI dopo "ORD"
+                  pattern: '^[0-9a-f]{24}$'
+                  example: "67cf0679d17aae8377e0fa6f"
+                cartItems:
+                  $ref: '#/components/schemas/CartItem'
+                  maxItems: 100
+                status:
+                  type: string
+                  enum: ['pagato', 'in-preparazione', 'creato', 'spedito', 'annullato']
+                  maxLength: 20
+                  example: "pagato"
+                signature:
+                  type: string
+                  maxLength: 500
+                  pattern: '^.{1,500}$'
+                  example: "36a801db749e145e92ddca75f36e59fb9a18ce891e0d9b65804aec10810d43a3"
+      responses:
+        '201':
+          description: Ordine creato con successo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '400':
+          description: Dati ordine non validi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples: #Serve a non fare fallire il test in 42crunch 
+                orderTooLarge:
+                  summary: Ordine troppo grande
+                  value:
+                    message: "Effettua ordini più piccoli" #Kong gateway message
+        '401':
+          description: Non autorizzato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples: #Serve a non fare fallire il test in 42crunch 
+                missingSignature:
+                  summary: Firma HMAC mancante
+                  value:
+                    message: "Missing HMAC signature"
+                invalidSignature:
+                  summary: Firma HMAC non valida
+                  value:
+                    message: "Invalid HMAC signature"
+        '406':
+          description: Not Acceptable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Errore interno del server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoRoutes'
+        default:
+          description: Errore non previsto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+
+  /admin/orders/getAll:
+    servers:
+    - url: https://microservices-alb-216051693.us-east-1.elb.amazonaws.com
+      description: Server principale
+    get:
+      summary: Ottieni tutti gli ordini
+      tags:
+        - Orders
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Lista di ordini
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/getAllResponse'
+        '401':
+          description: Non autorizzato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOnlyMessage'
+        '406':
+          description: Not Acceptable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Errore interno del server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          description: Errore non previsto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+#Ok Happy path in teoria
+  /admin/orders/update/{orderId}:
+    servers:
+    - url: https://microservices-alb-216051693.us-east-1.elb.amazonaws.com
+      description: Server principale
+    patch:
+      summary: Aggiorna stato ordine
+      tags:
+        - Orders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 17
+            pattern: '^ORD-\d{13}$' #sempre 13 NUMERI dopo "ORD"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+                  enum: ['pagato', 'in-preparazione', 'creato', 'spedito', 'annullato']
+                  maxLength: 20
+                  example: "pagato"
+                  
+      responses:
+        '200':
+          description: Stato ordine aggiornato con successo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderUpdateResponse'
+        '400':
+          description: Dati non validi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOnlyMessage'
+              examples:
+                badRequest:
+                    summary: Bad Request
+                    value:
+                      message: "Bad Request: Response body missing" #Kong gateway message
+                invalidRequest:
+                  summary: Invalid Request
+                  value:
+                    message: "Bad Request: Invalid JSON response body" #Kong gateway message
+                badInvalidRequest:
+                  summary: Invalid userID in response
+                  value:
+                    message: "Bad Request: userId missing in response"
+        '401':
+          description: Non autorizzato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                unauthorizedRequest:
+                  summary: Unauthorized Request
+                  value:
+                    message: "Unauthorized: Missing Authorization header" #Kong gateway message
+                invalidRequest:
+                  summary: Invalid token
+                  value:
+                    message: "Unauthorized: Invalid or missing token" #Kong gateway message
+                invalidJWT:
+                  summary: Invalid JWT
+                  value:
+                    message: "Unauthorized: Invalid JWT"
+                invalid: 
+                  summary: Missing UserId or Token
+                  value:
+                    message: "Unauthorized: Missing user ID in token"
+        '403':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                unauthorizedRequest:
+                  summary: Unauthorized Request
+                  value:
+                    message: "Unauthorized" #Kong gateway message
+        
+        '404':
+          description: Ordine non trovato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+            text/html:
+              schema:
+                type: string
+                maxLength: 4096
+                pattern: '^<html>[\\s\\S]{1,4090}</html>$'
+        '406':
+          description: Not Acceptable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Errore interno del server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          description: Errore non previsto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /admin/orders/my-order/{userId}:
+    servers:
+    - url: https://microservices-alb-216051693.us-east-1.elb.amazonaws.com
+      description: Server principale
+    get:
+      summary: Ottieni ordini di un utente
+      tags:
+        - Orders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 24
+            pattern: '^[0-9a-f]{24}$' #stringa esadecimale di 24 caratteri
+      responses:
+        '200':
+          description: Lista di ordini dell'utente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrdersResponse'
+        '401':
+          description: Non autorizzato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Nessun ordine trovato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                unexist:
+                  summary: Nessun match
+                  value: 
+                    message: "Nessun ordine trovato per questo utente"
+            text/html:
+              schema:
+                type: string
+                maxLength: 4096
+                pattern: '^<html>[\\s\\S]{1,4090}</html>$'
+        '406':
+          description: Not Acceptable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Errore interno del server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          description: Errore non previsto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /admin/orders/orders/{orderId}: #corretto con due orders..
+    servers:
+    - url: https://microservices-alb-216051693.us-east-1.elb.amazonaws.com
+      description: Server principale
+    get:
+      summary: Ottieni un ordine specifico
+      tags:
+        - Orders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 17
+            pattern: '^ORD-\d{13}$' #sempre 13 NUMERI dopo "ORD"
+      responses:
+        '200':
+          description: Dettagli dell'ordine
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderListResponse'
+        '401':
+          description: Non autorizzato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Ordine non trovato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOnlyMessage'
+            text/html:
+              schema:
+                type: string
+                maxLength: 4096
+                pattern: '^<html>[\\s\\S]{1,4090}</html>$'
+        '406':
+          description: Not Acceptable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Errore interno del server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          description: Errore non previsto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+#TODO
+  /api/payment/initiate:
+    servers:
+    - url: https://localhost:3005/api/payment
+      description: Server di sviluppo per Payments
+    post:
+      summary: Inizia un pagamento
+      tags:
+        - Payments
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+            examples:
+              validInitiate:
+                summary: Valid Attempt
+                value:
+                  userId: 67cf0679d17aae8377e0fa6f
+                  amount: 89900
+                  currency: eur
+                  quantity: 1   
+      responses:
+        '200':
+          description: Pagamento iniziato con successo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '204':
+          description: Pagamento iniziato con successo - No content
+          
+        '400':
+          description: Errore nell'iniziazione del pagamento
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Non autorizzato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '406':
+          description: Not Acceptable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Errore interno del server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          description: Errore non previsto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/shipments:
+    servers:
+    - url: https://microservices-alb-216051693.us-east-1.elb.amazonaws.com
+      description: Server principale
+    post:
+      summary: Crea una nuova spedizione
+      tags:
+        - Shipments
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Shipment'
+            examples:
+              validShipment:
+                summary: Spedizione valida - Happy path
+                value:
+                  orderId: "ORD-1744366170082"
+                  userId: "67cf0679d17aae8377e0fa6f"
+                  destinationAddress: "Via Ortica, 12, 20134 Milano MI, Italy"
+                  currentLocation:
+                    type: "Point"
+                    coordinates:
+                      - 9.243622799999999
+                      - 45.47093090000001
+      responses:
+        '201':
+          description: Spedizione creata con successo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShipmentResponse'  #DA ATTENZIONARE
+        '400':
+          description: Dati spedizione non validi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Non autorizzato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '406':
+          description: Not Acceptable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Errore interno del server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          description: Errore non previsto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/shipments/byOrder/{orderId}:
+    servers:
+    - url: https://microservices-alb-216051693.us-east-1.elb.amazonaws.com
+      description: Server principale
+    get:
+      summary: Ottieni spedizione per ID ordine
+      tags:
+        - Shipments
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 17
+            pattern: '^ORD-\d{13}$' #sempre 13 NUMERI dopo "ORD"
+      responses:
+        '200':
+          description: Dettagli della spedizione
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShipmentResponse' #ok
+        '401':
+          description: Non autorizzato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                unauthorizedRequest:
+                    summary: Unauthorized
+                    value:
+                      message: "Unauthorized: Missing Authorization header" #Kong gateway message
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOnlyMessage'
+              examples:
+                badRequest:
+                    summary: Forbidden Request
+                    value:
+                      message: "Unauthorized" #Kong gateway message
+        '404':
+          description: Spedizione non trovata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderNotFound'
+            text/html:
+              schema:
+                type: string
+                maxLength: 4096
+                pattern: '^<html>[\\s\\S]{1,4090}</html>$'
+        '406':
+          description: Not Acceptable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Errore interno del server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          description: Errore non previsto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+
+
+
+
+#Manca una DELETE : /product/${productId}  DELETE (Input: token, productId)
+
+#Inserire esempi di payload validi (happy path) nei punti in cui viene definito il requestBody. In questo modo 42Crunch utilizzerà tali esempi per il test del caso positivo.
+
+#admin:eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY3Y2VmNWY4ZDE3YWFlODM3N2UwZmEyOSIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc0MzM0MTk5NywiZXhwIjoxNzQ1OTMzOTk3fQ.NNRrT7uSIksRxJewybKVfMCVHrQ6URyyB03i0tbCW2g

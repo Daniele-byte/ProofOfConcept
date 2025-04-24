@@ -1,0 +1,27 @@
+
+  
+  .orders-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+  }
+  
+  .orders-table th, .orders-table td {
+    border: 1px solid #ddd;
+    padding: 10px;
+    text-align: center;
+    color:#333;
+  }
+  
+  .orders-table th {
+    background-color: #f4f4f4;
+    color:black;
+  }
+  
+  .orders-table select {
+    padding: 5px;
+  }
+  .h2-gestione{
+    color:#333;
+  }
+  

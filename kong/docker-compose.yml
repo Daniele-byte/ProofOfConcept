@@ -1,0 +1,69 @@
+
+services:
+  kong:
+    build: .
+    image: kong:latest
+    ports:
+      - "8000:8000"
+      - "8443:8443"
+      - "8001:8001"
+      - "8444:8444"
+      - "8002:8002"
+      - "8445:8445"
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: "/usr/local/kong/declarative/kong.yml"
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_LOG_LEVEL: "info"
+      KONG_PLUGINS: "bundled,http-log"
+      KONG_ADMIN_LISTEN: "0.0.0.0:8001"
+      KONG_ADMIN_GUI_URL: "http://localhost:8002"
+      KONG_UNTRUSTED_LUA_SANDBOX_REQUIRES: "cjson,resty.http,hmac"
+      KONG_LUA_PACKAGE_PATH: "/usr/local/share/lua/5.1/?.lua;;"
+    networks:
+      - kong-net
+    depends_on:
+      - logstash
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.10.0
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    networks:
+      - kong-net
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.10.0
+    volumes:
+      - ./logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+    ports:
+      - "5044:5044"
+      - "9600:9600"
+    environment:
+      LS_JAVA_OPTS: "-Xms256m -Xmx256m"
+    networks:
+      - kong-net
+    depends_on:
+      - elasticsearch
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.10.0-1
+    environment:
+      ELASTICSEARCH_HOSTS: "http://elasticsearch:9200"
+    ports:
+      - "5601:5601"
+    networks:
+      - kong-net
+    depends_on:
+      - elasticsearch
+
+networks:
+  kong-net:
+    driver: bridge

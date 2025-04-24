@@ -1,0 +1,41 @@
+/* src/styles/register.css */
+
+.register-container {
+  position: relative; /*this*/
+  background: rgba(60, 55, 160, 0.3); /* Sfondo semi-trasparente */
+  max-width: 400px;
+  margin: auto;
+  padding: 20px;
+  border-radius: 10px;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  margin-top: 25vh;
+  z-index: 10; /*this*/
+}
+
+input {
+  width: 100%;
+  padding: 10px;
+  margin: 10px 0;
+}
+
+.register-h2 {
+  color: white;
+}
+
+button {
+  padding: 10px;
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: #45a049;
+}
+
+.error {
+  color: red;
+}

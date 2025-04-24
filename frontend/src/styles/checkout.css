@@ -1,0 +1,128 @@
+/* checkout.css */
+.checkoutContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px;
+    background-color: #f4f7fc;
+    min-height: 100vh;
+  }
+  
+  .checkoutTitle {
+    font-size: 2.5rem;
+    font-weight: bold;
+    color: #333;
+    margin-bottom: 30px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+  }
+  
+  .checkoutCard {
+    width: 100%;
+    max-width: 480px;
+    background-color: white;
+    border-radius: 15px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+  }
+  
+  .checkoutItems {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .cardItem {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    border-bottom: 1px solid #e5e5e5;
+    padding-bottom: 15px;
+    transition: transform 0.5s, box-shadow 0.2s;
+  }
+  
+  .cardItem:last-child {
+    border-bottom: none;
+  }
+  
+  .cardItem:hover {
+    transform: scale(1.05);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+  }
+  
+  .cardImage {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 8px;
+  }
+  
+  .itemDetails {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  
+  .itemName {
+    font-size: 1.1rem;
+    color: #333;
+    font-weight: 600;
+  }
+  
+  .itemPrice {
+    font-size: 1rem;
+    color: #777;
+  }
+  
+  .pricingDetails {
+    margin-top: 20px;
+    padding-top: 10px;
+    border-top: 1px solid #e5e5e5;
+  }
+  
+  .pricingItem {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  
+  .pricingLabel {
+    font-size: 1.1rem;
+    color: #333;
+  }
+  
+  .pricingValue {
+    font-size: 1.1rem;
+    color: #777;
+  }
+  
+  .total {
+    font-weight: bold;
+  }
+  
+  .totalValue {
+    color: black;
+  }
+  
+  .checkoutFooter {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 20px;
+  }
+  
+  .checkoutButton {
+    background-color: #007bff;
+    color: white;
+    padding: 12px 24px;
+    font-size: 1.1rem;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+  }
+  
+  .checkoutButton:hover {
+    background-color: #0056b3;
+  }
+  

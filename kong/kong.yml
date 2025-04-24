@@ -1,0 +1,416 @@
+_format_version: "3.0"
+
+# Registro admin e user (hackedaccount)
+consumers:
+  - username: PoCAdmin
+    custom_id: "67cef5f8d17aae8377e0fa29"
+    acls:
+      - group: admin
+  - username: NewUser
+    custom_id: "67cef9efd17aae8377e0fa3f"
+  
+services:
+  - name: kong-health-service
+    url: http://127.0.0.1 
+    routes:
+      - name: health-route
+        paths:
+          - /health
+        strip_path: false
+    plugins:
+      - name: request-termination
+        config:
+          status_code: 200
+          message: "API_GATEWAY OK"
+
+  - name: user-service
+    url: http://10.0.3.211:3000 # Aggiorno IP se cambio il task
+    routes:
+      - name: user-route
+        paths:
+          - /api/auth
+        strip_path: false
+
+      - name: user-health-route
+        paths:
+          - /api/auth/health
+        strip_path: false
+        plugins:
+          - name: rate-limiting # Unrestricted Resource Consumption (6)
+            config:
+              error_code: 429
+              error_message: API rate limit exceeded
+              minute: 100
+              policy: local
+              second: 5
+      
+      - name: upload-profile # Broken Authentication (3)
+        paths:
+          - /api/auth/uploadProfile
+        strip_path: false
+        plugins:
+          - name: cors
+            config:
+              origins:
+                - "*"
+              methods:
+                - PUT
+              headers:
+                - "Authorization"
+              preflight_continue: true
+              credentials: true
+          - name: post-function
+            config:
+              access:
+              - |
+                -- Abilito il buffering 
+                kong.service.request.enable_buffering()
+              header_filter:
+              - |
+                if kong.request.get_method() == "OPTIONS" then
+                  return
+                end
+                
+                local jwt = require("resty.jwt")
+                
+                -- Estraggo il path della richiesta
+                local path = kong.request.get_raw_path()
+                kong.log.info("Path della richiesta: ", path)
+                
+                -- Estraggo userId dalla URL: formato /api/auth/uploadProfile/<userId>
+                local userId = path:match("/api/auth/uploadProfile/([^/]+)")
+                if not userId then
+                  kong.log.err("Errore: userId non trovato nella path")
+                  return kong.response.exit(400, { message = "Bad Request: userId missing in URL" })
+                end
+                
+                kong.log.info("UserId estratto da URL: ", userId)
+                
+                -- Recupero l'header Authorization
+                local header = kong.request.get_header("Authorization")
+                if not header then
+                  kong.log.err("Errore: Header Authorization mancante")
+                  return kong.response.exit(401, { message = "Unauthorized: Missing Authorization header" })
+                end
+                
+                local token = header:match("Bearer%s+([^%s]+)")
+                if not token then
+                  kong.log.err("Errore: Token JWT mancante o malformato")
+                  return kong.response.exit(401, { message = "Unauthorized: Invalid or missing token" })
+                end
+                
+                kong.log.info("Token prelevato: ", token)
+                
+                -- Decodifico il JWT
+                local jwtObj = jwt:verify("supersegreto12345", token)
+                if not jwtObj.verified then
+                  kong.log.err("Errore: JWT non valido")
+                  return kong.response.exit(401, { message = "Unauthorized: Invalid JWT" })
+                end
+                
+                local tokenId = jwtObj.payload and jwtObj.payload.id
+                if not tokenId then
+                  kong.log.err("Errore: ID utente assente nel token JWT")
+                  return kong.response.exit(401, { message = "Unauthorized: Missing user ID in token" })
+                end
+                
+                kong.log.info("ID estratto dal token: ", tokenId)
+                
+                -- Confronto l'ID del token con l'userId preso da URL
+                if tokenId == userId then
+                  kong.log.info("Match riuscito: token.id corrisponde a userId della richiesta")
+                else
+                  kong.log.err("Mismatch token - userId")
+                  return kong.response.exit(403, { message = "Unauthorized" })
+                end
+
+        
+
+  - name: shipment-service
+    url: http://10.0.1.167:3004 # Aggiorno IP se cambia il task
+    routes:
+      - name: shipment-route
+        paths:
+          - /api/shipments
+        strip_path: false
+      - name: shipment-byOrder-route # BOLA Mitigation (2)
+        paths:
+          - /api/shipments/byOrder/
+        strip_path: false
+        plugins:
+          - name: cors
+            config:
+              origins:
+                - "*"
+              methods:
+                - GET
+              headers:
+                - "Authorization"
+              preflight_continue: true
+              credentials: true
+          - name: post-function
+            config:
+              access:
+              - |
+                kong.service.request.enable_buffering() -- abilita il buffering della risposta per poter leggere il body successivamente. (altrimenti solo in body filter e non posso uscire con risposta 403)
+              header_filter: 
+              - |
+                if kong.request.get_method() == "OPTIONS" then
+                  return
+                end
+                local jwt = require("resty.jwt")
+                local cjson = require("cjson")
+                
+                -- Recupero Body e Header risposta
+                local body = kong.service.response.get_raw_body()
+                local header = kong.request.get_header("Authorization")
+                
+                if not body then
+                  kong.log.err("Errore: Body della risposta assente")
+                  return kong.response.exit(400, { message = "Bad Request: Response body missing" })
+                end
+
+                if not header then
+                  kong.log.err("Errore: Header Authorization mancante")
+                  return kong.response.exit(401, { message = "Unauthorized: Missing Authorization header" })
+                end
+
+
+                local token = header:match("Bearer%s+([^%s]+)")
+
+                if not token then
+                  kong.log.err("Errore: Token JWT mancante o malformato")
+                  return kong.response.exit(401, { message = "Unauthorized: Invalid or missing token" })
+                end
+
+                kong.log.info("Body prelevato: ", body)
+                kong.log.info("Authorization prelevato: ", header)
+                kong.log.info("Token prelevato: ", token)
+                
+                -- Prelevo agevolmente userId con cjson
+                local ok, decoded_body = pcall(cjson.decode, body)
+                
+                if not ok then
+                  kong.log.err("Errore: Impossibile decodificare il body JSON")
+                  return kong.response.exit(400, { message = "Bad Request: Invalid JSON response body" })
+                end
+                
+                kong.log.info("Decoded_body prelevato: ", decoded_body) 
+                
+                -- Loggo l'intera tabella in formato JSON per verificare il contenuto
+                local decoded_body_json = cjson.encode(decoded_body)
+                kong.log.info("Contenuto decodificato: ", decoded_body_json)
+
+                -- Prelevo userId dal bodyx
+                local userId = decoded_body.shipment and decoded_body.shipment.userId
+                if not userId then
+                  kong.log.err("Errore: userId mancante nella risposta")
+                  return kong.response.exit(400, { message = "Bad Request: userId missing in response" })
+                end
+
+                kong.log.info("UserId prelevato: ", userId)
+
+                -- Decodifica jwt 
+                local jwtObj = jwt:verify("supersegreto12345", token)
+                if not jwtObj.verified then
+                  kong.log.err("Errore: JWT non valido")
+                  return kong.response.exit(401, { message = "Unauthorized: Invalid JWT" })
+                end
+                local tokenId = jwtObj.payload.id
+                if not tokenId then
+                  kong.log.err("Errore: ID utente assente nel token JWT")
+                  return kong.response.exit(401, { message = "Unauthorized: Missing user ID in token" })
+                end
+                kong.log("ID estratto dal token:", tokenId)
+
+                if tokenId == userId then
+                   kong.log.info("Match riuscito: token.id corrisponde a userId della risposta")
+                else
+                   kong.log.err("Mismatch Token")
+                   return kong.response.exit(403, { message = "Unauthorized" })
+                end
+                        
+                
+  - name: order-service
+    url: http://10.0.2.53:3003 # Aggiorna l'IP se cambi il task
+    routes:
+      - name: order-route
+        paths:
+          - /admin/orders
+        strip_path: false
+      
+      - name: order-create # Unrestricted Access to Sensitive Business Flows (5)  , funge da prima barriera ma validazione anche lato backend "robusta"
+        paths:
+          - /admin/orders/create
+        strip_path: false
+        plugins:
+        - name: pre-function
+          config:
+            access:
+            - |
+              kong.service.request.enable_buffering() 
+              if kong.request.get_method() == "OPTIONS" then
+                  return
+                end
+              local cjson = require "cjson"
+              local hmac = require "hmac"
+              local HMAC_SECRET_KEY = "PaymentSecretIncredible999"
+
+              -- Prelevo il body 
+              local body = kong.request.get_raw_body() 
+              local json_body, err = cjson.decode(body)
+              kong.log.info("Body:",body)
+              kong.log.info("JSONNN:",json_body)
+
+              local orderId = json_body.orderId
+              local userId = json_body.userId
+              local quantity = json_body.cartItems[1].quantity
+              kong.log.info("Quantity:", quantity)
+              if quantity > 10 then
+                return kong.response.exit(400, { message = "Effettua ordini più piccoli" })
+              end
+
+              -- Concatenazione per HMAC
+              local dataString = string.format("%s|%s|%d", orderId, userId, quantity)
+              -- Crea un contesto HMAC usando SHA256 con la chiave specificata
+              local ctx = hmac.sha256(HMAC_SECRET_KEY)
+              kong.log.info("Context: ", ctx)
+
+              -- Aggiorno il contesto con il messaggio , usage on github : https://github.com/ogay/hmac
+              ctx:update(dataString)
+              -- Ottieni il digest finale in formato esadecimale (default: false => hex)
+              local calculated_signature_hex = ctx:final()
+              kong.log.info("Calculated signature:", calculated_signature_hex)
+
+              -- Recupero la signature inviata nel body (campo 'signature')
+              local received_signature = json_body.signature
+              if not received_signature then
+                kong.response.exit(403, { message = "Missing HMAC signature" })
+              end
+              -- Confronto la signature calcolata con quella ricevuta
+              if received_signature ~= calculated_signature_hex then
+                kong.response.exit(403, { message = "Invalid HMAC signature" })
+              end
+        
+      - name: order-getAll-route # BOPLA MITIGATION (1)
+        paths:
+          - /admin/orders/getAll
+        strip_path: false
+        plugins:
+          - name: jwt
+            config:
+              secret_is_base64: false 
+              run_on_preflight: false 
+              key_claim_name: id # Uso il campo 'id' invece di 'iss' (default) per identificare l'utente
+          - name: acl
+            config:
+              allow:
+                - admin
+          - name: cors
+            config:
+              origins:
+                - "*"
+              methods:
+                - GET
+                - POST
+                - OPTIONS
+              headers:
+                - "Authorization"
+              credentials: true
+          - name: response-transformer
+            config:
+              replace:
+                  json:
+                    - message:Unauthorized
+
+      - name: order-update-route # BFLA MITIGATION (4)
+        paths:
+          - /admin/orders/update
+        strip_path: false
+        plugins:
+          - name: post-function
+            config:
+              access:
+              - |
+                kong.service.request.enable_buffering() -- abilito il buffering della risposta per poter leggere il body successivamente. (altrimenti solo in body filter e non posso uscire con risposta 403)
+              header_filter: 
+              - |
+                if kong.request.get_method() == "OPTIONS" then
+                  return
+                end
+                local jwt = require("resty.jwt")
+                local cjson = require("cjson")
+                
+                -- Recupero Body e Header risposta
+                local body = kong.service.response.get_raw_body()
+                local header = kong.request.get_header("Authorization")
+                
+                if not body then
+                  kong.log.err("Errore: Body della risposta assente")
+                  return kong.response.exit(400, { message = "Bad Request: Response body missing" })
+                end
+
+                if not header then
+                  kong.log.err("Errore: Header Authorization mancante")
+                  return kong.response.exit(401, { message = "Unauthorized: Missing Authorization header" })
+                end
+
+                local token = header:match("Bearer%s+([^%s]+)")
+
+                if not token then
+                  kong.log.err("Errore: Token JWT mancante o malformato")
+                  return kong.response.exit(401, { message = "Unauthorized: Invalid or missing token" })
+                end
+
+                kong.log.info("Body prelevato: ", body)
+                kong.log.info("Authorization prelevato: ", header)
+                kong.log.info("Token prelevato: ", token)
+                
+                -- Prelevo agevolmente userId con cjson
+                local ok, decoded_body = pcall(cjson.decode, body)
+                
+                if not ok then
+                  kong.log.err("Errore: Impossibile decodificare il body JSON")
+                  return kong.response.exit(400, { message = "Bad Request: Invalid JSON response body" })
+                end
+                
+                kong.log.info("Decoded_body prelevato: ", decoded_body) 
+                
+                -- Loggo l'intera tabella in formato JSON per verificare il contenuto
+                local decoded_body_json = cjson.encode(decoded_body)
+                kong.log.info("Contenuto decodificato: ", decoded_body_json)
+                
+                local userId = decoded_body.order and decoded_body.order.userId
+                if not userId then
+                  kong.log.err("Errore: userId mancante nella risposta")
+                  return kong.response.exit(400, { message = "Bad Request: userId missing in response" })
+                end
+                kong.log.info("UserId prelevato: ", userId)
+                
+                -- Decodifica jwt 
+                local jwtObj = jwt:verify("supersegreto12345", token)
+                if not jwtObj.verified then
+                  kong.log.err("Errore: JWT non valido")
+                  return kong.response.exit(401, { message = "Unauthorized: Invalid JWT" })
+                end
+                local tokenId = jwtObj.payload.id
+                local role = jwtObj.payload.role
+                if not tokenId then
+                  kong.log.err("Errore: ID utente assente nel token JWT")
+                  return kong.response.exit(401, { message = "Unauthorized: Missing user ID in token" })
+                end
+                kong.log("ID estratto dal token:", tokenId)
+
+                if tokenId == userId or role == "admin" then
+                   kong.log.info("Match riuscito: token.id corrisponde a userId della risposta")
+                else
+                   kong.log.err("Mismatch Token")
+                   return kong.response.exit(403, { message = "Unauthorized" })
+                end
+
+
+                
+
+        
+
+

@@ -1,0 +1,152 @@
+#version: '3.8'
+
+services:
+  # Servizi backend
+  user-service:
+    build:
+      context: ./backend/services/user-service
+    ports:
+      - "3000:3000"  # Porta locale : Porta del container
+    volumes:
+      - ./backend/services/user-service:/usr/src/app  # Monta il codice sorgente
+      - ./backend/services/user-service/certs:/certs  # Monta la cartella dei certificati nel container
+    depends_on:
+      - mongodb-user  # Assicura che MongoDB sia avviato prima
+    networks:
+      - logistic-network
+
+  warehouse-service:
+    build:
+      context: ./backend/services/warehouse-management
+    ports:
+      - "3002:3002"
+    volumes:
+      - ./backend/services/warehouse-management:/usr/src/app
+    depends_on:
+      - mongodb-warehouse
+    networks:
+      - logistic-network
+
+  order-service:
+    build:
+      context: ./backend/services/order-service
+    ports:
+      - "3003:3003"
+    volumes:
+      - ./backend/services/order-service:/usr/src/app
+    depends_on:
+      - mongodb-order
+    networks:
+      - logistic-network
+
+  shipment-service:
+    build:
+      context: ./backend/services/shipment-service
+    ports:
+      - "3004:3004"
+    volumes:
+      - ./backend/services/shipment-service:/usr/src/app
+    depends_on:
+      - mongodb-shipment
+    networks:
+      - logistic-network
+
+  payment-service:
+    build:
+      context: ./backend/services/payment-service
+    ports:
+      - "3005:3005"
+    volumes:
+      - ./backend/services/payment-service:/usr/src/app
+    depends_on:
+      - mongodb-payment
+    networks:
+      - logistic-network
+
+  # MongoDB e altri contenitori...
+  mongodb-user:
+    image: mongo:6.0
+    container_name: mongodb-user
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-user-data:/data/db
+    networks:
+      - logistic-network
+
+  mongodb-warehouse:
+    image: mongo:6.0
+    container_name: mongodb-warehouse
+    restart: always
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongodb-warehouse-data:/data/db
+    networks:
+      - logistic-network
+
+  mongodb-order:
+    image: mongo:6.0
+    container_name: mongodb-order
+    restart: always
+    ports:
+      - "27019:27017"
+    volumes:
+      - mongodb-order-data:/data/db
+    networks:
+      - logistic-network
+
+  mongodb-shipment:
+    image: mongo:6.0
+    container_name: mongodb-shipment
+    restart: always
+    ports:
+      - "27020:27017"
+    volumes:
+      - mongodb-shipment-data:/data/db
+    networks:
+      - logistic-network
+
+  mongodb-payment:
+    image: mongo:6.0
+    container_name: mongodb-payment
+    restart: always
+    ports:
+      - "27021:27017"
+    volumes:
+      - mongodb-payment-data:/data/db
+    networks:
+      - logistic-network
+
+  # Servizio frontend
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "80:80"   # Porta HTTP
+      - "443:443" # Porta HTTPS
+    depends_on:
+      - user-service
+      - warehouse-service
+      - order-service
+      - shipment-service
+      - payment-service
+    volumes:
+      - ./frontend/nginx-config/default.conf:/etc/nginx/conf.d/default.conf
+      - ./frontend/certs:/etc/nginx/certs  # Monta la cartella dei certificati
+    restart: always
+    networks:
+      - logistic-network
+
+
+volumes:
+  mongodb-user-data:
+  mongodb-warehouse-data:
+  mongodb-order-data:
+  mongodb-shipment-data:
+  mongodb-payment-data:
+
+networks:
+  logistic-network:
+    driver: bridge

@@ -1,0 +1,62 @@
+/* src/styles/login.css */
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow-x: hidden;
+}
+/* Login form styling */
+.login-container {
+  position: relative; /*this*/
+  background: rgba(60, 55, 160, 0.3); /* Sfondo semi-trasparente */
+  max-width: 400px;
+  margin: auto;
+  padding: 20px;
+  border-radius: 10px;
+  justify-content: center;
+  align-items: center;
+  color:white;
+  margin-top: 25vh;
+  z-index: 10; /*this*/
+}
+
+.login-h2{
+  color:white;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+}
+.input-div {
+  margin-right: 20px;
+}
+input {
+  margin-bottom: 10px;
+  margin-right: 10px;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  margin: auto;
+}
+
+button {
+  padding: 10px;
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  margin-top: 2%;
+}
+
+button:hover {
+  background-color: #45a049;
+}
+
+.error {
+  color: red;
+}

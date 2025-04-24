@@ -1,0 +1,104 @@
+/* Reset e impostazioni di base */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  body {
+    font-family: 'Roboto', sans-serif;
+    background-color: #f4f7f6;
+    color: white;
+    line-height: 1.6;
+  }
+  
+  /* Container principale */
+  .order-details-container {
+    max-width: 800px;
+    margin: 40px auto;
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 30px 40px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+  
+  /* Titoli e intestazioni */
+  .order-details-container h2 {
+    text-align: center;
+    margin-bottom: 25px;
+    font-size: 2rem;
+    color: #2c3e50;
+  }
+  
+  /* Paragrafi e label */
+  .order-details-container p {
+    margin-bottom: 15px;
+    font-size: 1.1rem;
+    color: #333;
+  }
+  
+  .order-details-container p strong {
+    color: #34495e;
+  }
+  
+  /* Lista dei prodotti */
+  .order-details-container ul {
+    list-style: none;
+    margin: 20px 0;
+    padding: 0;
+  }
+  
+  .order-details-container ul li {
+    background: #ecf0f1;
+    padding: 15px 20px;
+    margin-bottom: 10px;
+    border-radius: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: transform 0.2s ease;
+    color: #333;
+  }
+  
+  .order-details-container ul li:hover {
+    transform: scale(1.02);
+  }
+  
+  /* Bottone "Torna Indietro" */
+  .order-details-container button {
+    display: block;
+    margin: 30px auto 0;
+    padding: 12px 30px;
+    font-size: 1.1rem;
+    background-color: #3498db;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+  }
+  
+  .order-details-container button:hover {
+    background-color: #2980b9;
+    transform: translateY(-2px);
+  }
+  .h3-details{
+    color:#333;
+  }
+
+  /* Responsive */
+  @media (max-width: 600px) {
+    .order-details-container {
+      padding: 20px 25px;
+    }
+    
+    .order-details-container h2 {
+      font-size: 1.75rem;
+    }
+    
+    .order-details-container p,
+    .order-details-container button {
+      font-size: 1rem;
+    }
+  }
+  
