@@ -4,7 +4,7 @@
 I servizi sono containerizzati con **Docker**, orchestrati in locale con **Docker Compose**, mentre in AWS vengono eseguiti su **ECS** (con immagini ospitate in **ECR**).  
 Per la persistenza dati si usa **MongoDB** (sia in locale che in cloud, a seconda del servizio).
 
-![Architettura del sistema](https://github.com/user-attachments/assets/2cac6edb-ead6-4da7-9f93-49a01d2dad88)
+![Architettura del sistema](./ConKong.png)
 
 ---
 
