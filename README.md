@@ -23,6 +23,7 @@ Per la persistenza dati si usa **MongoDB** (sia in locale che in cloud, a second
 
 ## ✨ Features
 
+- **Kong Gateway**: API Gateway per instradamento, sicurezza (JWT, rate limiting, autenticazione) e monitoraggio delle chiamate API
 - **User Service**: gestione utenti, autenticazione e profili  
 - **Order Service**: creazione, aggiornamento e tracking ordini  
 - **Payment Service**: integrazione con Stripe per pagamenti  
@@ -35,6 +36,7 @@ Per la persistenza dati si usa **MongoDB** (sia in locale che in cloud, a second
 
 ## 🏗 Architettura
 
+- **Kong Gateway** funge da ingresso centralizzato: gestisce autenticazione, autorizzazione, rate limiting e monitoraggio delle chiamate API
 - Ogni servizio è un container Docker  
 - In locale, tutti i container sono orchestrati da Docker Compose  
 - In cloud, **User** e **Order Service** girano su AWS ECS; tutti gli altri possono essere migrati facilmente  
@@ -47,6 +49,7 @@ Per la persistenza dati si usa **MongoDB** (sia in locale che in cloud, a second
 
 | Livello            | Tool / Framework                   |
 |--------------------|------------------------------------|
+| **Kong Gateway**   | Kong Gateway (plugin Lua custom per sicurezza)   |
 | **Backend**        | Node.js, Express, Nodemon, Axios   |
 | **Frontend**       | React, Axios, Nginx                |
 | **DB**             | MongoDB                            |
@@ -73,3 +76,32 @@ Per la persistenza dati si usa **MongoDB** (sia in locale che in cloud, a second
    ```bash
    git clone https://github.com/Daniele-byte/logistic-system.git
    cd logistic-system
+2. Crea il file .env in ciascun service (es. backend/services/payment-service/.env) con le tue variabili:
+   ```bash
+   MONGO_URI=mongodb://localhost:27017/<db>
+   STRIPE_SECRET_KEY=sk_test_...
+   JWT_SECRET=tuo_jwt_secret
+3. Avvia i container:
+   ```bash
+   docker-compose up --build
+4. Apri il frontend: https://localhost:3000
+
+## ☁️ Deploy in AWS
+1. Inserimento credenziali AWS
+   ```bash
+   aws configure
+2. Provisioning infrastruttura
+   ```bash
+   cd terraform
+   terraform init
+   terraform apply -auto-approve
+3. Verifica modifiche su ECS
+   Controlla la console AWS ECS per lo stato dei task e dei container
+
+## License
+
+This project is proprietary and confidential. All rights are reserved by the author.
+
+For full licensing information, please refer to the [LICENSE](./LICENSE) file.
+
+
