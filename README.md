@@ -10,13 +10,12 @@ Per la persistenza dati si usa **MongoDB** (sia in locale che in cloud, a second
 
 ## 📖 Sommario
 
-- [Features](#-features)  
-- [Architettura](#-architettura)  
-- [Tecnologie](#-tecnologie)  
-- [Prerequisiti](#-prerequisiti)  
+- [Features](#-features)
+- [Architettura](#-architettura)
+- [Tecnologie](#-tecnologie)
+- [Prerequisiti](#-prerequisiti)
 - [Avvio in locale](#-avvio-in-locale)  
-- [Deploy in AWS](#-deploy-in-aws)  
-- [Uso](#-uso)  
+- [Deploy in AWS](#-deploy-in-aws)
 - [Autori & Licenza](#-autori--licenza)  
 
 ---
