@@ -86,6 +86,8 @@ Per la persistenza dati si usa **MongoDB** (sia in locale che in cloud, a second
    docker-compose up --build
 4. Apri il frontend: https://localhost:3000
 
+---
+
 ## ☁️ Deploy in AWS
 1. Inserimento credenziali AWS
    ```bash
@@ -97,6 +99,8 @@ Per la persistenza dati si usa **MongoDB** (sia in locale che in cloud, a second
    terraform apply -auto-approve
 3. Verifica modifiche su ECS
    Controlla la console AWS ECS per lo stato dei task e dei container
+
+---
 
 ## License
 
