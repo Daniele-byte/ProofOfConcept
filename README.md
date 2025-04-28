@@ -1,6 +1,6 @@
 # Logistic System 🚚📦
 
-**Logistic System** è una piattaforma **microservizi** per la gestione di flussi logistici: utenti, ordini, pagamenti e molto altro.  
+**Logistic System** è una piattaforma basata su **microservizi** per la gestione di flussi logistici: utenti, ordini, pagamenti e molto altro.  
 I servizi sono containerizzati con **Docker**, orchestrati in locale con **Docker Compose**, mentre in AWS vengono eseguiti su **ECS** (con immagini ospitate in **ECR**).  
 Per la persistenza dati si usa **MongoDB** (sia in locale che in cloud, a seconda del servizio).
 
